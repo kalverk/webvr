@@ -29,6 +29,8 @@ var regularRenderer;
 var oculusRenderer;
 var currentRenderer;
 
+var mouseButtonDown;
+
 //WEBVR
 var cameraLeft = new THREE.PerspectiveCamera();
 cameraLeft.matrixAutoUpdate = false;
@@ -36,6 +38,9 @@ var cameraRight = new THREE.PerspectiveCamera();
 cameraRight.matrixAutoUpdate = false;
 var eyeOffsetLeft = new THREE.Matrix4();
 var eyeOffsetRight = new THREE.Matrix4();
+
+var lastMouseX = 0;
+var lastMouseY = 0;
 
 function angleRangeDeg(angle) {
   angle %= 360;
@@ -53,20 +58,6 @@ function initScene(){
 
     $container = $('#viewContainer');
 
-    $('#toggle-render').click(function() {
-        if (!inOculusMode) {
-            USE_TRACKER = true;
-            inOculusMode = true;
-            initWebSocket();
-        }else{
-            //TODO tagasi oculusest ei tule, vana renderdus j��b k�lge
-            inOculusMode = false;
-            USE_TRACKER = false;
-            currentRenderer = regularRenderer;
-            connection.close();
-        }
-    });
-
     $('#toggle-webvr').click(function() {
         USE_WEBVR = true;
         USE_TRACKER = false;
@@ -82,12 +73,7 @@ function initScene(){
 	camera.position.set(0,0,10);
 	camera.lookAt(scene.position);
 
-	try {
-        regularRenderer = new THREE.WebGLRenderer({preserveDrawingBuffer: true});
-    }catch(e){
-      alert('This application needs WebGL enabled!');
-      return false;
-    }
+	regularRenderer = new THREE.WebGLRenderer({preserveDrawingBuffer: true});
 
     regularRenderer.autoClearColor = false;
 	regularRenderer.setSize(WIDTH, HEIGHT);
@@ -95,8 +81,6 @@ function initScene(){
 	currentRenderer = regularRenderer;
 
 	$container.append(regularRenderer.domElement);
-
-	THREEx.WindowResize(regularRenderer, camera);
 
 	//Pictures
 	var panoramaBox = new THREE.BoxGeometry(128, 128, 128, 16, 16, 16);
@@ -128,152 +112,75 @@ function initScene(){
 	scene.add(panoramaMesh);
 }
 
-function initWebSocket() {
-  connection = new WebSocket(WEBSOCKET_ADDR);
-  connection.binaryType = 'arraybuffer'
-  console.log('WebSocket conn:', connection);
+/**
+* Sets up the event listeners so we
+* can click and drag the cube around
+*/
 
-  connection.onopen = function () {
-    // connection is opened and ready to use
-    console.log('websocket open');
-  };
+$('#viewContainer').mousedown(function(event) {
+  mouseButtonDown = true;
+  lastClientX = event.clientX;
+  lastClientY = event.clientY;
 
-  connection.onerror = function (error) {
-    // an error occurred when sending/receiving data
-    console.log('websocket error :-(');
-  };
+  event.preventDefault();
+});
 
-  connection.onmessage = function (message) {
-    data = new Float32Array(message.data);
-    if (message.data.byteLength == 16) {
-      HMDRotation.set(data[0],data[1],data[2],data[3]);
+$('#viewContainer').mouseup(function(event) {
+  mouseButtonDown = false;
+});
+
+$('#viewContainer').mousemove(function(event) {
+     if (mouseButtonDown) {
+         var enableX = 1;
+         BaseRotationEuler.set(
+         angleRangeRad(BaseRotationEuler.x + (event.clientY - lastClientY) * MOUSE_SPEED * enableX),
+         angleRangeRad(BaseRotationEuler.y + (event.clientX - lastClientX) * MOUSE_SPEED),0.0);
+         lastClientX = event.clientX;
+         lastClientY = event.clientY;
+         BaseRotation.setFromEuler(BaseRotationEuler);
+     }
+     event.preventDefault();
+});
+
+document.getElementById('viewContainer').addEventListener('onTouchDown', function (event) {
+    mouseDown = true;
+    lastMouseX = event.originalEvent.changedTouches[0].clientX;
+    lastMouseY = event.originalEvent.changedTouches[0].clientY;
+
+    event.preventDefault();
+});
+
+document.getElementById('viewContainer').addEventListener('onTouchMove', function (event) {
+    var enableX = 1;
+    if(mouseDown) {
+        var thisMouseX = event.originalEvent.changedTouches[0].clientX;
+        var thisMouseY = event.originalEvent.changedTouches[0].clientY;
+        BaseRotationEuler.set(
+        angleRangeRad(BaseRotationEuler.x + (thisMouseY - lastMouseY) * MOUSE_SPEED * enableX),
+        angleRangeRad(BaseRotationEuler.y + (thisMouseX - lastMouseX) * MOUSE_SPEED),0.0);
+        lastMouseX = thisMouseX;
+        lastMouseY = thisMouseY;
+        BaseRotation.setFromEuler(BaseRotationEuler);
     }
-    else if (message.data.byteLength == 12) {
-      HMDTranslation.set(data[0], data[1], data[2]);
-    };
-  };
-
-  connection.onclose = function () {
-    console.log('websocket close' + USE_TRACKER);
-    if (USE_TRACKER) setTimeout(initWebSocket, 1000);
-  };
-
-  connectionHMDData = new WebSocket(WEBSOCKET_ADDR + "?");
-
-  connectionHMDData.onmessage = function(message) {
-    var HMDData = JSON.parse(message.data);
-    console.log(HMDData);
-    connectionHMDData.close();
-
-    currentRenderer = new THREE.OculusRiftEffect(regularRenderer, HMDData);
-    currentRenderer.setSize(WIDTH, HEIGHT );
-  }
-}
-
-function initControls() {
-    var movingH = false;
-    var movingV = false;
-
-  $(document).keydown(function(e) {
-    switch(e.keyCode) {
-        //TODO arrow click means move forward or backward add time restriction
-      case 37: //left arrow
-        keyboardMoveVector.y = KEYBOARD_SPEED;
-        if(movingH){
-            keyboardMoveVector.y = 0;
-            movingH = false;
-            break;
-        }
-        movingH = true;
-        break;
-      case 38: //up arrow
-        //TODO is needed?
-        break;
-      case 39: //right arrow
-        keyboardMoveVector.y = -KEYBOARD_SPEED;
-        if(movingH){
-            keyboardMoveVector.y = 0;
-            movingH = false;
-            break;
-        }
-        movingH = true;
-        break;
-      case 40: //down arrow
-        //TODO is needed?
-        break;
-      case 18: // Alt
-        //TODO use depth
-        USE_DEPTH = !USE_DEPTH;
-        //setSphereGeometry();
-        break;
-      case 70: // F
-        //TODO force browser full screen
-        console.log("f key press ");
-        break;
-      case 82: // R
-        //TODO reset position
-        console.log("reset sensor ");
-
-        break;
-    }
-  });
-
-  // Mouse
-  // ---------------------------------------
-  var viewer = $('#viewContainer'),
-      mouseButtonDown = false,
-      lastClientX = 0,
-      lastClientY = 0;
-
-  viewer.dblclick(function() {
-    //TODO move to the next place
-    console.log("move to the next place");
-  });
-
-  viewer.mousedown(function(event) {
-    mouseButtonDown = true;
-    lastClientX = event.clientX;
-    lastClientY = event.clientY;
-  });
-
-  viewer.mouseup(function() {
-    mouseButtonDown = false;
-  });
-
-  viewer.mousemove(function(event) {
-    if (mouseButtonDown) {
-      //var enableX = (USE_TRACKER || USE_WEBVR) ? 0 : 1;
-      var enableX = 1;
-      BaseRotationEuler.set(
-        angleRangeRad(BaseRotationEuler.x + (event.clientY - lastClientY) * MOUSE_SPEED * enableX),
-        angleRangeRad(BaseRotationEuler.y + (event.clientX - lastClientX) * MOUSE_SPEED),
-        0.0
-      );
-      lastClientX = event.clientX;
-      lastClientY = event.clientY;
-      BaseRotation.setFromEuler(BaseRotationEuler);
-    }
-  });
-
-}
+});
 
 function render() {
     if (USE_WEBVR) {
-    cameraLeft.matrix.copy(camera.matrix).multiply(eyeOffsetLeft);
-    cameraLeft.matrixWorldNeedsUpdate = true;
+        cameraLeft.matrix.copy(camera.matrix).multiply(eyeOffsetLeft);
+        cameraLeft.matrixWorldNeedsUpdate = true;
 
-    currentRenderer.enableScissorTest ( true );
-    currentRenderer.setScissor( 0, 0, window.innerWidth / 2, window.innerHeight );
-    currentRenderer.setViewport( 0, 0, window.innerWidth / 2, window.innerHeight );
-    currentRenderer.render(scene, cameraLeft);
+        currentRenderer.enableScissorTest ( true );
+        currentRenderer.setScissor( 0, 0, window.innerWidth / 2, window.innerHeight );
+        currentRenderer.setViewport( 0, 0, window.innerWidth / 2, window.innerHeight );
+        currentRenderer.render(scene, cameraLeft);
 
-    // Render right eye
-    cameraRight.matrix.copy(camera.matrix).multiply(eyeOffsetRight);
-    cameraRight.matrixWorldNeedsUpdate = true;
+        // Render right eye
+        cameraRight.matrix.copy(camera.matrix).multiply(eyeOffsetRight);
+        cameraRight.matrixWorldNeedsUpdate = true;
 
-    currentRenderer.setScissor( window.innerWidth / 2, 0, window.innerWidth / 2, window.innerHeight );
-    currentRenderer.setViewport( window.innerWidth / 2, 0, window.innerWidth / 2, window.innerHeight );
-    currentRenderer.render(scene, cameraRight);
+        currentRenderer.setScissor( window.innerWidth / 2, 0, window.innerWidth / 2, window.innerHeight );
+        currentRenderer.setViewport( window.innerWidth / 2, 0, window.innerWidth / 2, window.innerHeight );
+        currentRenderer.render(scene, cameraRight);
   }
   else {
     currentRenderer.render(scene, camera);
@@ -290,28 +197,13 @@ function resize( event ) {
 
 function loop() {
   requestAnimationFrame( loop );
-
-  // Compute move vector
-  moveVector.addVectors(keyboardMoveVector, gamepadMoveVector);
-
-  // Disable X movement HMD tracking is enabled
-  if (USE_TRACKER) {
-    moveVector.x = 0;
-  }
-
   // Apply movement
-  BaseRotationEuler.set( angleRangeRad(BaseRotationEuler.x + moveVector.x), angleRangeRad(BaseRotationEuler.y + moveVector.y), 0.0 );
-  BaseRotation.setFromEuler(BaseRotationEuler);
+    BaseRotationEuler.set( angleRangeRad(BaseRotationEuler.x + moveVector.x), angleRangeRad(BaseRotationEuler.y + moveVector.y), 0.0 );
+    BaseRotation.setFromEuler(BaseRotationEuler);
 
-  // Update camera rotation
-  camera.quaternion.multiplyQuaternions(BaseRotation, HMDRotation);
-  camera.position.copy(HMDTranslation.clone().applyQuaternion(BaseRotation));
-
-  // Compute heading
-  headingVector.setFromQuaternion(camera.quaternion);
-  currHeading = angleRangeDeg(THREE.Math.radToDeg(-headingVector.y));
-
-  // render
+    // Update camera rotation
+    camera.quaternion.multiplyQuaternions(BaseRotation, HMDRotation);
+    camera.position.copy(HMDTranslation.clone().applyQuaternion(BaseRotation));
   render();
 }
 
@@ -335,6 +227,4 @@ $(window).keypress(function(e) {
 });
 
 initScene();
-initControls();
-
 loop();

@@ -1,0 +1,21 @@
+.button {
+	font: 'Strait', sans-serif;
+	cursor:pointer;
+	display:inline-block;
+	background:#404040;
+	padding:10px;
+	color:#a0a0a0;
+	position: absolute;
+	z-index: 2;
+}
+
+.button:hover{
+	color:white;
+}
+
+#viewContainer{
+    position: absolute;
+    left:0px;
+    top:0px;
+    z-index: 1;
+}
