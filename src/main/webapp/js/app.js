@@ -116,8 +116,7 @@ function initScene(){
 * Sets up the event listeners so we
 * can click and drag the cube around
 */
-
-$('#viewContainer').mousedown(function(event) {
+$('#viewContainer').on( "vmousedown", function(event) {
   mouseButtonDown = true;
   lastClientX = event.clientX;
   lastClientY = event.clientY;
@@ -125,11 +124,11 @@ $('#viewContainer').mousedown(function(event) {
   event.preventDefault();
 });
 
-$('#viewContainer').mouseup(function(event) {
+$('#viewContainer').on( "vmouseup", function(event) {
   mouseButtonDown = false;
 });
 
-$('#viewContainer').mousemove(function(event) {
+$('#viewContainer').on( "vmousemove", function(event) {
      if (mouseButtonDown) {
          var enableX = 1;
          BaseRotationEuler.set(
@@ -142,7 +141,7 @@ $('#viewContainer').mousemove(function(event) {
      event.preventDefault();
 });
 
-document.getElementById('viewContainer').addEventListener('onTouchDown', function (event) {
+document.getElementById('viewContainer').addEventListener('touchstart', function (event) {
     mouseDown = true;
     lastMouseX = event.originalEvent.changedTouches[0].clientX;
     lastMouseY = event.originalEvent.changedTouches[0].clientY;
@@ -150,7 +149,7 @@ document.getElementById('viewContainer').addEventListener('onTouchDown', functio
     event.preventDefault();
 });
 
-document.getElementById('viewContainer').addEventListener('onTouchMove', function (event) {
+document.getElementById('viewContainer').addEventListener('touchmove', function (event) {
     var enableX = 1;
     if(mouseDown) {
         var thisMouseX = event.originalEvent.changedTouches[0].clientX;
